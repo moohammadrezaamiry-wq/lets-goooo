@@ -1,7 +1,7 @@
 {
   "name": "coffee-clicker-pvp",
   "version": "1.0.0",
-  "description": "بازی کافی کلیکر با PvP و لیدربورد",
+  "description": "بازی کافی کلیکر با PvP و لیدربورد آنلاین",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
