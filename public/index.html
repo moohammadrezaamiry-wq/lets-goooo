@@ -22,7 +22,7 @@
     #register-area { background:#241a12; padding:20px; border-radius:12px; margin-bottom:16px; border:1px solid #4a382490; }
     #register-area h3 { color:#e8b45c; margin-bottom:12px; text-align:center; }
     #register-area input { width:100%; padding:10px; border-radius:8px; border:1px solid #4a382490; background:#1c130d; color:#f3e7d3; font-size:15px; margin-top:6px; }
-    #register-area button { margin-top:12px; }
+    #register-area button { margin-top:12px; width:100%; }
     .stats { background:#241a12; padding:18px 12px; border-radius:12px; margin:20px 0; display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; color:#f3e7d3; font-weight:bold; border:1px solid #4a382490; }
     .stats span { background:#1c130d; padding:6px 18px; border-radius:8px; font-size:1.2rem; min-width:70px; text-align:center; color:#e8b45c; }
     .cup-zone { position:relative; height:190px; display:flex; align-items:flex-end; justify-content:center; }
@@ -66,6 +66,8 @@
     .hidden { display:none !important; }
     .error-msg { color:#d17a5e; background:#3a1f18; padding:8px 12px; border-radius:8px; margin-top:8px; display:none; }
     .error-msg.show { display:block; }
+    .primary { width:100%; margin-top:12px; padding:13px; border:none; border-radius:10px; background:linear-gradient(180deg,#e8b45c,#d98e4a); color:#241505; font-weight:800; font-size:15px; cursor:pointer; transition:transform .1s; }
+    .primary:active { transform:scale(.98); }
   </style>
 </head>
 <body>
@@ -78,7 +80,7 @@
     <h3>👤 ثبت‌نام با نام کاربری</h3>
     <p style="color:#c2ac8c; font-size:13px; text-align:center;">یک نام برای خود انتخاب کنید. این نام در لیدربورد نمایش داده می‌شود.</p>
     <input type="text" id="usernameInput" placeholder="نام کاربری" maxlength="20" />
-    <button class="primary" id="registerBtn" style="width:100%; margin-top:12px;">ثبت نام</button>
+    <button class="primary" id="registerBtn">ثبت نام</button>
     <div class="error-msg" id="registerError"></div>
     <div id="registeredInfo" class="hidden" style="color:#93ab7d; text-align:center; margin-top:8px;">
       ✅ شما با نام <span id="displayName"></span> ثبت‌نام کردید.
@@ -91,6 +93,497 @@
     <div class="tab" data-tab="pvp">⚔️ PvP</div>
     <div class="tab" data-tab="leaderboard">🏆 لیدربورد</div>
   </div>
+
+  <!-- تب بازی -->
+  <div id="tab-game" class="tab-content active">
+    <div class="stats">
+      <span id="coffeeDisplay">0</span> <span>☕</span>
+      <span id="clickPowerDisplay">1</span> <span>⚡</span>
+    </div>
+    <div style="text-align:center;">
+      <div class="cup-zone">
+        <svg class="steam" width="60" height="60" viewBox="0 0 60 60">
+          <path class="s1" d="M20 55 C15 45,25 40,20 30 C15 20,25 15,22 5"/>
+          <path class="s2" d="M32 55 C27 45,37 40,32 30 C27 20,37 15,34 5"/>
+          <path class="s3" d="M44 55 C39 45,49 40,44 30 C39 20,49 15,46 5"/>
+        </svg>
+        <button class="coffee-btn" id="coffeeBtn" aria-label="کلیک">
+          <svg viewBox="0 0 150 150" width="150" height="150">
+            <ellipse cx="75" cy="130" rx="55" ry="8" fill="#00000040"/>
+            <path d="M30 55 h75 v40 a37.5 37.5 0 0 1-37.5 37.5h-0 A37.5 37.5 0 0 1 30 95 Z" fill="#e8b45c" stroke="#8a5a3a" stroke-width="3"/>
+            <path id="liquid" d="M36 61 h63 v30 a31.5 31.5 0 0 1-31.5 31.5 A31.5 31.5 0 0 1 36 91 Z" fill="#5c3a20"/>
+            <path d="M105 62 h8 a14 14 0 0 1 0 28 h-8" fill="none" stroke="#8a5a3a" stroke-width="6"/>
+            <ellipse cx="67.5" cy="55" rx="37.5" ry="7" fill="#3a2717"/>
+          </svg>
+        </button>
+      </div>
+      <div><span class="cooldown-text" id="cooldownStatus">✅ آماده</span></div>
+    </div>
+
+    <div class="abilities">
+      <div class="ability-card"><div>☕ +۵ در ثانیه</div><button id="boostPerSec">خرید (<span id="pricePerSec">۲۰</span>)</button></div>
+      <div class="ability-card"><div>⚡ +۱ کلیک</div><button id="boostClick">خرید (<span id="priceClick">۱۵</span>)</button></div>
+      <div class="ability-card"><div>⏱️ کاهش کول‌داون</div><button id="reduceCooldown">خرید (<span id="priceCooldown">۳۰</span>)</button></div>
+    </div>
+
+    <div class="reset-area"><button id="resetGameBtn">🔄 ریست بازی</button></div>
+  </div>
+
+  <!-- تب PvP -->
+  <div id="tab-pvp" class="tab-content">
+    <div class="pvp-area">
+      <button id="joinQueueBtn">🎮 ورود به مسابقه</button>
+      <div class="status" id="pvpStatus">در صف نیستید</div>
+      <div class="match-info" id="matchInfo">
+        <div class="row"><span class="label">حریف:</span><span class="value" id="opponentName">-</span></div>
+        <div class="row"><span class="label">زمان باقی‌مانده:</span><span class="value" id="timerDisplay">60</span></div>
+        <div class="row"><span class="label">کلیک من:</span><span class="value" id="myClicksDisplay">0</span></div>
+        <div class="row"><span class="label">کلیک حریف:</span><span class="value" id="opponentClicksDisplay">0</span></div>
+        <div class="match-result" id="matchResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- تب لیدربورد -->
+  <div id="tab-leaderboard" class="tab-content">
+    <div class="leaderboard">
+      <h3>🏆 برترین‌ها</h3>
+      <div id="leaderboardList"><div class="lb-item" style="justify-content:center;">در حال بارگذاری...</div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    ★ داده‌ها در سرور ذخیره می‌شوند<br>
+    <a href="https://rubika.ir/@Coffee_Clicker" target="_blank">📱 کانال روبیکا: @Coffee_Clicker</a>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  // ================================================================
+  //  کلاینت – بدون رمز، با Device ID، لیدربورد کلیک‌ها
+  // ================================================================
+
+  const socket = io();
+
+  // ---------- Device ID ----------
+  function getDeviceId() {
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+      deviceId = crypto.randomUUID ? crypto.randomUUID() : 
+                'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('deviceId', deviceId);
+    }
+    return deviceId;
+  }
+  const deviceId = getDeviceId();
+
+  // ---------- وضعیت بازی ----------
+  const COOLDOWN_SEC = 0.3;
+  const BASE_PRICE_PER_SEC = 20;
+  const BASE_PRICE_CLICK = 15;
+  const BASE_PRICE_COOLDOWN = 30;
+
+  let game = {
+    coffee: 0,
+    clickPower: 1,
+    cooldownMax: COOLDOWN_SEC,
+    cooldownCurrent: 0,
+    perSec: 0,
+    lastTick: Date.now(),
+    pricePerSec: BASE_PRICE_PER_SEC,
+    priceClick: BASE_PRICE_CLICK,
+    priceCooldown: BASE_PRICE_COOLDOWN,
+  };
+
+  let myUsername = null;
+  let isRegistered = false;
+
+  let isPlaying = false;
+  let currentMatchId = null;
+  let myClicks = 0;
+  let opponentClicks = 0;
+
+  // ---------- DOM refs ----------
+  const registerArea = document.getElementById('register-area');
+  const usernameInput = document.getElementById('usernameInput');
+  const registerBtn = document.getElementById('registerBtn');
+  const registerError = document.getElementById('registerError');
+  const registeredInfo = document.getElementById('registeredInfo');
+  const displayName = document.getElementById('displayName');
+
+  const coffeeDisplay = document.getElementById('coffeeDisplay');
+  const clickPowerDisplay = document.getElementById('clickPowerDisplay');
+  const cooldownStatus = document.getElementById('cooldownStatus');
+  const coffeeBtn = document.getElementById('coffeeBtn');
+  const liquid = document.getElementById('liquid');
+
+  const boostPerSecBtn = document.getElementById('boostPerSec');
+  const boostClickBtn = document.getElementById('boostClick');
+  const reduceCooldownBtn = document.getElementById('reduceCooldown');
+  const resetBtn = document.getElementById('resetGameBtn');
+  const pricePerSecSpan = document.getElementById('pricePerSec');
+  const priceClickSpan = document.getElementById('priceClick');
+  const priceCooldownSpan = document.getElementById('priceCooldown');
+
+  const joinQueueBtn = document.getElementById('joinQueueBtn');
+  const pvpStatus = document.getElementById('pvpStatus');
+  const matchInfo = document.getElementById('matchInfo');
+  const opponentName = document.getElementById('opponentName');
+  const timerDisplay = document.getElementById('timerDisplay');
+  const myClicksDisplay = document.getElementById('myClicksDisplay');
+  const opponentClicksDisplay = document.getElementById('opponentClicksDisplay');
+  const matchResult = document.getElementById('matchResult');
+
+  const leaderboardList = document.getElementById('leaderboardList');
+
+  // ================================================================
+  //  Socket.io رویدادها
+  // ================================================================
+
+  socket.on('connect', () => {
+    console.log('✅ متصل به سرور');
+    socket.emit('identify', { deviceId });
+    socket.emit('getLeaderboard');
+  });
+
+  socket.on('identity', (data) => {
+    if (data && data.username) {
+      myUsername = data.username;
+      isRegistered = true;
+      registerArea.querySelector('h3').textContent = '👤 ثبت‌نام شده';
+      usernameInput.style.display = 'none';
+      registerBtn.style.display = 'none';
+      registerError.classList.remove('show');
+      registeredInfo.classList.remove('hidden');
+      displayName.textContent = myUsername;
+      document.querySelector('#register-area p').textContent = 'شما با این نام ثبت‌نام کرده‌اید.';
+    } else {
+      registerArea.querySelector('h3').textContent = '👤 ثبت‌نام با نام کاربری';
+      usernameInput.style.display = 'block';
+      registerBtn.style.display = 'block';
+      registeredInfo.classList.add('hidden');
+      document.querySelector('#register-area p').textContent = 'یک نام برای خود انتخاب کنید. این نام در لیدربورد نمایش داده می‌شود.';
+    }
+  });
+
+  registerBtn.addEventListener('click', () => {
+    const username = usernameInput.value.trim();
+    if (!username || username.length < 2) {
+      registerError.textContent = 'نام کاربری باید حداقل ۲ کاراکتر باشد.';
+      registerError.classList.add('show');
+      return;
+    }
+    registerError.classList.remove('show');
+    socket.emit('register', { deviceId, username });
+  });
+
+  usernameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') registerBtn.click();
+  });
+
+  socket.on('registerSuccess', (data) => {
+    myUsername = data.username;
+    isRegistered = true;
+    registerArea.querySelector('h3').textContent = '✅ ثبت‌نام موفق';
+    usernameInput.style.display = 'none';
+    registerBtn.style.display = 'none';
+    registerError.classList.remove('show');
+    registeredInfo.classList.remove('hidden');
+    displayName.textContent = myUsername;
+    document.querySelector('#register-area p').textContent = 'شما با این نام ثبت‌نام کردید.';
+  });
+
+  socket.on('registerError', (msg) => {
+    registerError.textContent = msg;
+    registerError.classList.add('show');
+  });
+
+  socket.on('leaderboardData', (data) => {
+    renderLeaderboard(data);
+  });
+
+  function renderLeaderboard(data) {
+    const entries = Object.entries(data)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => (b.totalClicks || 0) - (a.totalClicks || 0));
+
+    leaderboardList.innerHTML = '';
+    if (entries.length === 0) {
+      leaderboardList.innerHTML = '<div class="lb-item" style="justify-content:center;">هنوز مسابقه‌ای برگزار نشده</div>';
+      return;
+    }
+    for (let item of entries) {
+      const div = document.createElement('div');
+      div.className = 'lb-item';
+      div.innerHTML = `
+        <span>${item.name}</span>
+        <span class="clicks">☕ کلیک ${item.totalClicks || 0} | 🏆 برد ${item.wins || 0} | باخت ${item.losses || 0}</span>
+      `;
+      leaderboardList.appendChild(div);
+    }
+  }
+
+  // ================================================================
+  //  بازی محلی + ارسال کلیک‌ها به سرور برای لیدربورد
+  // ================================================================
+
+  function saveGame() {
+    localStorage.setItem('coffee_offline', JSON.stringify(game));
+  }
+
+  function loadGame() {
+    const raw = localStorage.getItem('coffee_offline');
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw);
+        Object.assign(game, saved);
+        game.lastTick = Date.now();
+        return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function updateLiquid() {
+    if (!liquid) return;
+    const fill = (game.coffee % 50) / 50;
+    const emptyY = 91, fullY = 61;
+    const topY = emptyY - (emptyY - fullY) * Math.min(fill + 0.06, 1);
+    liquid.setAttribute('d', `M36 ${topY.toFixed(1)} h63 v${(91 - topY).toFixed(1)} a31.5 31.5 0 0 1-31.5 31.5 A31.5 31.5 0 0 1 36 91 Z`);
+  }
+
+  function updateUI() {
+    coffeeDisplay.textContent = Math.floor(game.coffee);
+    clickPowerDisplay.textContent = game.clickPower;
+    if (game.cooldownCurrent > 0) {
+      cooldownStatus.textContent = `⏳ ${Math.ceil(game.cooldownCurrent * 10) / 10} ثانیه`;
+      coffeeBtn.classList.add('disabled');
+    } else {
+      cooldownStatus.textContent = '✅ آماده';
+      coffeeBtn.classList.remove('disabled');
+    }
+    pricePerSecSpan.textContent = game.pricePerSec;
+    priceClickSpan.textContent = game.priceClick;
+    priceCooldownSpan.textContent = game.priceCooldown;
+
+    boostPerSecBtn.disabled = (game.coffee < game.pricePerSec);
+    boostClickBtn.disabled = (game.coffee < game.priceClick);
+    reduceCooldownBtn.disabled = (game.coffee < game.priceCooldown || game.cooldownMax <= 0.05);
+
+    updateLiquid();
+    saveGame();
+  }
+
+  function gameTick() {
+    const now = Date.now();
+    const delta = (now - game.lastTick) / 1000;
+    game.lastTick = now;
+    if (game.cooldownCurrent > 0) {
+      game.cooldownCurrent = Math.max(0, game.cooldownCurrent - delta);
+    }
+    if (game.perSec > 0) {
+      game.coffee += game.perSec * delta;
+    }
+    game.coffee = Math.floor(game.coffee);
+    updateUI();
+    requestAnimationFrame(gameTick);
+  }
+
+  // ---------- کلیک اصلی (با ارسال به سرور برای لیدربورد) ----------
+  function handleClick() {
+    if (!isRegistered) {
+      alert('لطفاً ابتدا ثبت‌نام کنید.');
+      return;
+    }
+    const now = Date.now() / 1000;
+    if (now - (game._lastClickTime || 0) < game.cooldownMax) return;
+    game._lastClickTime = now;
+
+    const gained = game.clickPower;
+    game.coffee += gained;
+    game.cooldownCurrent = game.cooldownMax;
+    updateUI();
+
+    // ارسال کلیک به سرور برای به‌روزرسانی لیدربورد
+    socket.emit('addClicks', { count: gained });
+
+    // اگر در مسابقه هستیم، کلیک را با تعداد واقعی به سرور بفرست
+    if (isPlaying && currentMatchId) {
+      socket.emit('pvpClick', { matchId: currentMatchId, count: gained });
+    }
+
+    // انیمیشن
+    const bean = document.createElement('div');
+    bean.textContent = '☕';
+    bean.style.cssText = 'position:fixed;font-size:22px;pointer-events:none;z-index:999;transition:all .8s ease-out;';
+    const rect = coffeeBtn.getBoundingClientRect();
+    bean.style.left = (rect.left + rect.width/2) + 'px';
+    bean.style.top = (rect.top + rect.height/2) + 'px';
+    document.body.appendChild(bean);
+    requestAnimationFrame(() => {
+      bean.style.transform = `translate(${Math.random()*60-30}px, -90px) rotate(180deg)`;
+      bean.style.opacity = '0';
+    });
+    setTimeout(() => bean.remove(), 800);
+  }
+
+  // ---------- خرید توانایی‌ها ----------
+  function buyPerSec() {
+    const price = game.pricePerSec;
+    if (game.coffee < price) return;
+    game.coffee -= price;
+    game.perSec += 5;
+    game.pricePerSec = Math.floor(price * 1.5);
+    updateUI();
+  }
+
+  function buyClick() {
+    const price = game.priceClick;
+    if (game.coffee < price) return;
+    game.coffee -= price;
+    game.clickPower += 1;
+    game.priceClick = Math.floor(price * 1.5);
+    updateUI();
+  }
+
+  function buyCooldown() {
+    const price = game.priceCooldown;
+    if (game.coffee < price) return;
+    if (game.cooldownMax <= 0.05) { alert('کول‌داون به حداقل رسیده!'); return; }
+    game.coffee -= price;
+    game.cooldownMax = Math.max(0.05, game.cooldownMax - 0.05);
+    game.priceCooldown = Math.floor(price * 1.5);
+    if (game.cooldownCurrent > game.cooldownMax) game.cooldownCurrent = game.cooldownMax;
+    updateUI();
+  }
+
+  function resetGame() {
+    if (!confirm('آیا از ریست کردن بازی مطمئنید؟')) return;
+    localStorage.removeItem('coffee_offline');
+    game = {
+      coffee: 0,
+      clickPower: 1,
+      cooldownMax: COOLDOWN_SEC,
+      cooldownCurrent: 0,
+      perSec: 0,
+      lastTick: Date.now(),
+      pricePerSec: BASE_PRICE_PER_SEC,
+      priceClick: BASE_PRICE_CLICK,
+      priceCooldown: BASE_PRICE_COOLDOWN,
+    };
+    updateUI();
+  }
+
+  // ================================================================
+  //  PvP
+  // ================================================================
+
+  joinQueueBtn.addEventListener('click', () => {
+    if (!isRegistered) {
+      alert('لطفاً ابتدا ثبت‌نام کنید.');
+      return;
+    }
+    socket.emit('joinQueue');
+    joinQueueBtn.disabled = true;
+    pvpStatus.textContent = 'در حال جستجوی حریف...';
+    matchInfo.style.display = 'none';
+    matchResult.innerHTML = '';
+  });
+
+  socket.on('waiting', (data) => {
+    pvpStatus.textContent = data.message;
+    joinQueueBtn.disabled = false;
+  });
+
+  socket.on('matchStart', (data) => {
+    currentMatchId = data.matchId;
+    isPlaying = true;
+    joinQueueBtn.disabled = true;
+    pvpStatus.textContent = '⚔️ مسابقه شروع شد!';
+    matchInfo.style.display = 'block';
+    matchResult.innerHTML = '';
+
+    const players = data.players;
+    const me = players.find(p => p.id === socket.id);
+    const opponent = players.find(p => p.id !== socket.id);
+    opponentName.textContent = opponent ? opponent.username : 'حریف';
+    timerDisplay.textContent = data.duration;
+    myClicksDisplay.textContent = 0;
+    opponentClicksDisplay.textContent = 0;
+    myClicks = 0;
+    opponentClicks = 0;
+  });
+
+  socket.on('timerUpdate', (data) => {
+    timerDisplay.textContent = data.remaining;
+  });
+
+  socket.on('clickUpdate', (data) => {
+    if (data.playerId === socket.id) {
+      myClicks = data.clicks;
+      myClicksDisplay.textContent = myClicks;
+    } else {
+      opponentClicks = data.clicks;
+      opponentClicksDisplay.textContent = opponentClicks;
+    }
+  });
+
+  socket.on('matchEnd', (data) => {
+    isPlaying = false;
+    joinQueueBtn.disabled = false;
+    pvpStatus.textContent = '🏁 مسابقه تمام شد!';
+    let resultText = '';
+    if (data.winner === socket.id) {
+      resultText = '🎉 شما برنده شدید!';
+    } else if (data.winner === null) {
+      resultText = '🤝 مساوی!';
+    } else {
+      resultText = '😞 شما بازنده شدید!';
+    }
+    matchResult.innerHTML = `<h3>${resultText}</h3>`;
+    currentMatchId = null;
+  });
+
+  socket.on('matchCancelled', (data) => {
+    isPlaying = false;
+    joinQueueBtn.disabled = false;
+    pvpStatus.textContent = '❌ مسابقه لغو شد: ' + data.reason;
+    matchInfo.style.display = 'none';
+    currentMatchId = null;
+  });
+
+  // ================================================================
+  //  تب‌ها
+  // ================================================================
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ================================================================
+  //  مقداردهی اولیه
+  // ================================================================
+  loadGame();
+  updateUI();
+
+  coffeeBtn.addEventListener('click', handleClick);
+  boostPerSecBtn.addEventListener('click', buyPerSec);
+  boostClickBtn.addEventListener('click', buyClick);
+  reduceCooldownBtn.addEventListener('click', buyCooldown);
+  resetBtn.addEventListener('click', resetGame);
+
+  game.lastTick = Date.now();
+  requestAnimationFrame(gameTick);
+
+  socket.emit('getLeaderboard');
+</script>
+</body>
+</html>  </div>
 
   <!-- تب بازی -->
   <div id="tab-game" class="tab-content active">
