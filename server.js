@@ -5,7 +5,7 @@ const io = require('socket.io')(http);
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 const DEVICE_DB_FILE = path.join(__dirname, 'devices.json');
 const LEADERBOARD_FILE = path.join(__dirname, 'leaderboard.json');
@@ -39,7 +39,6 @@ const matches = {};
 io.on('connection', (socket) => {
   console.log('🔵 کاربر متصل:', socket.id);
 
-  // ---- ثبت‌نام ----
   socket.on('register', ({ deviceId, username }) => {
     username = username.trim();
     if (!username || username.length < 2) {
@@ -63,7 +62,6 @@ io.on('connection', (socket) => {
     io.emit('leaderboardData', leaderboard);
   });
 
-  // ---- شناسایی ----
   socket.on('identify', ({ deviceId }) => {
     const username = deviceDB[deviceId];
     if (username) {
@@ -75,7 +73,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ---- دریافت کلیک‌های عادی (برای لیدربورد) ----
   socket.on('addClicks', ({ count }) => {
     if (!socket.username) return;
     if (!leaderboard[socket.username]) {
@@ -86,12 +83,10 @@ io.on('connection', (socket) => {
     io.emit('leaderboardData', leaderboard);
   });
 
-  // ---- درخواست لیدربورد ----
   socket.on('getLeaderboard', () => {
     socket.emit('leaderboardData', leaderboard);
   });
 
-  // ---- PvP: ورود به صف ----
   socket.on('joinQueue', () => {
     if (!socket.username) {
       socket.emit('error', 'لطفاً ابتدا ثبت‌نام کنید.');
@@ -159,7 +154,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ---- دریافت کلیک در مسابقه (با تعداد کلیک واقعی) ----
   socket.on('pvpClick', ({ matchId, count }) => {
     const match = matches[matchId];
     if (!match || match.finished) return;
@@ -173,7 +167,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ---- قطع اتصال ----
   socket.on('disconnect', () => {
     console.log('🔴 کاربر قطع شد:', socket.id);
     waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
