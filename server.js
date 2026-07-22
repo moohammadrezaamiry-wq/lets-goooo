@@ -5,7 +5,7 @@ const io = require('socket.io')(http);
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // ========== فایل‌های ذخیره‌سازی ==========
 const DEVICE_DB_FILE = path.join(__dirname, 'devices.json');    // deviceId -> username
