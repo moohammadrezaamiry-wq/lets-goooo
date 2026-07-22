@@ -1,79 +1,151 @@
 const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
-const fs = require('fs');
-const path = require('path');
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*" }
+});
 
-const PORT = process.env.PORT || 3000;
+app.use(express.static(__dirname)); // برای سرو کردن HTML
 
-const DEVICE_DB_FILE = path.join(__dirname, 'devices.json');
-const LEADERBOARD_FILE = path.join(__dirname, 'leaderboard.json');
-
-function readJSON(file) {
-  try {
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, 'utf8'));
-    }
-  } catch (e) {
-    console.error('خطا در خواندن فایل:', e);
-  }
-  return {};
-}
-
-function writeJSON(file, data) {
-  try {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('خطا در نوشتن فایل:', e);
-  }
-}
-
-let deviceDB = readJSON(DEVICE_DB_FILE);
-let leaderboard = readJSON(LEADERBOARD_FILE);
-
-function saveDeviceDB() { writeJSON(DEVICE_DB_FILE, deviceDB); }
-function saveLeaderboard() { writeJSON(LEADERBOARD_FILE, leaderboard); }
-
-app.use(express.static('public'));
-
-let waitingPlayers = [];
-const matches = {};
+// ذخیره‌سازی در حافظه (برای Railway ساده)
+let users = {};        // deviceId => username
+let leaderboard = {};  // username => { totalClicks, wins, losses }
 
 io.on('connection', (socket) => {
-  console.log('🔵 کاربر متصل:', socket.id);
+  console.log('کاربر متصل شد:', socket.id);
+
+  socket.on('identify', ({ deviceId }) => {
+    const username = users[deviceId];
+    socket.emit('identity', { username });
+    socket.join('lobby');
+  });
 
   socket.on('register', ({ deviceId, username }) => {
-    username = username.trim();
     if (!username || username.length < 2) {
-      socket.emit('registerError', 'نام کاربری باید حداقل ۲ کاراکتر باشد.');
-      return;
+      return socket.emit('registerError', 'نام کاربری نامعتبر است');
     }
-    const existingDevice = Object.keys(deviceDB).find(d => deviceDB[d] === username);
-    if (existingDevice && existingDevice !== deviceId) {
-      socket.emit('registerError', 'این نام قبلاً توسط دستگاه دیگری ثبت شده است.');
-      return;
+    if (Object.values(users).includes(username)) {
+      return socket.emit('registerError', 'این نام کاربری قبلاً گرفته شده');
     }
-    deviceDB[deviceId] = username;
-    saveDeviceDB();
+
+    users[deviceId] = username;
     if (!leaderboard[username]) {
-      leaderboard[username] = { wins: 0, losses: 0, totalClicks: 0 };
-      saveLeaderboard();
+      leaderboard[username] = { totalClicks: 0, wins: 0, losses: 0 };
     }
-    socket.username = username;
-    socket.deviceId = deviceId;
-    socket.emit('registerSuccess', { username, deviceId });
+    socket.emit('registerSuccess', { username });
     io.emit('leaderboardData', leaderboard);
   });
 
-  socket.on('identify', ({ deviceId }) => {
-    const username = deviceDB[deviceId];
-    if (username) {
-      socket.username = username;
-      socket.deviceId = deviceId;
-      socket.emit('identity', { username, deviceId });
-    } else {
-      socket.emit('identity', null);
+  socket.on('addClicks', ({ count }) => {
+    const username = Object.values(users).find(u => true); // ساده‌سازی موقتی
+    // بهتره username رو با deviceId map کنیم
+    // فعلاً فقط برای دمو
+    if (username && leaderboard[username]) {
+      leaderboard[username].totalClicks = (leaderboard[username].totalClicks || 0) + count;
+      io.emit('leaderboardData', leaderboard);
+    }
+  });
+
+  // ========== PvP Queue ==========
+  let queue = [];
+  let matches = {};
+
+  socket.on('joinQueue', () => {
+    if (queue.includes(socket.id)) return;
+    queue.push(socket.id);
+    socket.emit('waiting', { message: 'در حال جستجوی حریف...' });
+
+    if (queue.length >= 2) {
+      const p1 = queue.shift();
+      const p2 = queue.shift();
+
+      const matchId = 'match_' + Date.now();
+      matches[matchId] = {
+        players: [p1, p2],
+        clicks: { [p1]: 0, [p2]: 0 },
+        duration: 60,
+        timer: null
+      };
+
+      io.to(p1).to(p2).emit('matchStart', {
+        matchId,
+        players: [
+          { id: p1, username: getUsername(p1) },
+          { id: p2, username: getUsername(p2) }
+        ],
+        duration: 60
+      });
+
+      // تایمر
+      matches[matchId].timer = setInterval(() => {
+        matches[matchId].duration--;
+        io.to(p1).to(p2).emit('timerUpdate', { remaining: matches[matchId].duration });
+
+        if (matches[matchId].duration <= 0) {
+          endMatch(matchId);
+        }
+      }, 1000);
+    }
+  });
+
+  socket.on('pvpClick', ({ matchId, count }) => {
+    const match = matches[matchId];
+    if (!match) return;
+
+    match.clicks[socket.id] = (match.clicks[socket.id] || 0) + count;
+    io.to(match.players[0]).to(match.players[1]).emit('clickUpdate', {
+      playerId: socket.id,
+      clicks: match.clicks[socket.id]
+    });
+  });
+
+  function getUsername(socketId) {
+    // پیدا کردن username بر اساس deviceId (ساده‌سازی)
+    return Object.keys(users).find(key => true) || 'ناشناس';
+  }
+
+  function endMatch(matchId) {
+    const match = matches[matchId];
+    if (!match) return;
+
+    clearInterval(match.timer);
+
+    const [p1, p2] = match.players;
+    const c1 = match.clicks[p1] || 0;
+    const c2 = match.clicks[p2] || 0;
+
+    let winner = null;
+    if (c1 > c2) winner = p1;
+    else if (c2 > c1) winner = p2;
+
+    io.to(p1).to(p2).emit('matchEnd', { winner });
+
+    // به‌روزرسانی لیدربورد
+    const u1 = getUsername(p1);
+    const u2 = getUsername(p2);
+    if (leaderboard[u1]) leaderboard[u1].wins += (winner === p1 ? 1 : 0);
+    if (leaderboard[u2]) leaderboard[u2].wins += (winner === p2 ? 1 : 0);
+
+    delete matches[matchId];
+    io.emit('leaderboardData', leaderboard);
+  }
+
+  socket.on('getLeaderboard', () => {
+    socket.emit('leaderboardData', leaderboard);
+  });
+
+  socket.on('disconnect', () => {
+    queue = queue.filter(id => id !== socket.id);
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, () => {
+  console.log(`🚀 سرور روی پورت ${PORT} اجرا شد`);
+});      socket.emit('identity', null);
     }
   });
 
