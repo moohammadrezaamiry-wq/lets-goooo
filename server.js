@@ -7,45 +7,96 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 
-// ========== لیدربورد (ذخیره در فایل JSON) ==========
+const DEVICE_DB_FILE = path.join(__dirname, 'devices.json');
 const LEADERBOARD_FILE = path.join(__dirname, 'leaderboard.json');
 
-function loadLeaderboard() {
+function readJSON(file) {
   try {
-    if (fs.existsSync(LEADERBOARD_FILE)) {
-      const data = fs.readFileSync(LEADERBOARD_FILE, 'utf8');
-      return JSON.parse(data);
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
     }
-  } catch (e) {
-    console.error('خطا در خواندن لیدربورد:', e);
-  }
+  } catch (e) { console.error('خطا در خواندن فایل:', e); }
   return {};
 }
 
-function saveLeaderboard(data) {
+function writeJSON(file, data) {
   try {
-    fs.writeFileSync(LEADERBOARD_FILE, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('خطا در ذخیره لیدربورد:', e);
-  }
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  } catch (e) { console.error('خطا در نوشتن فایل:', e); }
 }
 
-let leaderboard = loadLeaderboard();
+let deviceDB = readJSON(DEVICE_DB_FILE);
+let leaderboard = readJSON(LEADERBOARD_FILE);
 
-// ========== صف انتظار و مسابقات ==========
+function saveDeviceDB() { writeJSON(DEVICE_DB_FILE, deviceDB); }
+function saveLeaderboard() { writeJSON(LEADERBOARD_FILE, leaderboard); }
+
+app.use(express.static('public'));
+
 let waitingPlayers = [];
 const matches = {};
 
-// ========== Express ==========
-app.use(express.static('public'));
-
-// ========== Socket.io ==========
 io.on('connection', (socket) => {
   console.log('🔵 کاربر متصل:', socket.id);
-  let currentMatchId = null;
 
-  socket.on('joinQueue', (username) => {
-    socket.username = username || 'ناشناس';
+  // ---- ثبت‌نام ----
+  socket.on('register', ({ deviceId, username }) => {
+    username = username.trim();
+    if (!username || username.length < 2) {
+      socket.emit('registerError', 'نام کاربری باید حداقل ۲ کاراکتر باشد.');
+      return;
+    }
+    const existingDevice = Object.keys(deviceDB).find(d => deviceDB[d] === username);
+    if (existingDevice && existingDevice !== deviceId) {
+      socket.emit('registerError', 'این نام قبلاً توسط دستگاه دیگری ثبت شده است.');
+      return;
+    }
+    deviceDB[deviceId] = username;
+    saveDeviceDB();
+    if (!leaderboard[username]) {
+      leaderboard[username] = { wins: 0, losses: 0, totalClicks: 0 };
+      saveLeaderboard();
+    }
+    socket.username = username;
+    socket.deviceId = deviceId;
+    socket.emit('registerSuccess', { username, deviceId });
+    io.emit('leaderboardData', leaderboard);
+  });
+
+  // ---- شناسایی ----
+  socket.on('identify', ({ deviceId }) => {
+    const username = deviceDB[deviceId];
+    if (username) {
+      socket.username = username;
+      socket.deviceId = deviceId;
+      socket.emit('identity', { username, deviceId });
+    } else {
+      socket.emit('identity', null);
+    }
+  });
+
+  // ---- دریافت کلیک‌های عادی (برای لیدربورد) ----
+  socket.on('addClicks', ({ count }) => {
+    if (!socket.username) return;
+    if (!leaderboard[socket.username]) {
+      leaderboard[socket.username] = { wins: 0, losses: 0, totalClicks: 0 };
+    }
+    leaderboard[socket.username].totalClicks = (leaderboard[socket.username].totalClicks || 0) + count;
+    saveLeaderboard();
+    io.emit('leaderboardData', leaderboard);
+  });
+
+  // ---- درخواست لیدربورد ----
+  socket.on('getLeaderboard', () => {
+    socket.emit('leaderboardData', leaderboard);
+  });
+
+  // ---- PvP: ورود به صف ----
+  socket.on('joinQueue', () => {
+    if (!socket.username) {
+      socket.emit('error', 'لطفاً ابتدا ثبت‌نام کنید.');
+      return;
+    }
 
     if (waitingPlayers.length > 0) {
       const opponentSocket = waitingPlayers.shift();
@@ -65,7 +116,6 @@ io.on('connection', (socket) => {
         timerInterval: null
       };
       matches[matchId] = matchData;
-      currentMatchId = matchId;
 
       io.to(matchId).emit('matchStart', {
         matchId,
@@ -109,12 +159,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('click', (matchId) => {
+  // ---- دریافت کلیک در مسابقه (با تعداد کلیک واقعی) ----
+  socket.on('pvpClick', ({ matchId, count }) => {
     const match = matches[matchId];
     if (!match || match.finished) return;
     if (!match.players.includes(socket.id)) return;
 
-    match.clicks[socket.id] = (match.clicks[socket.id] || 0) + 1;
+    match.clicks[socket.id] = (match.clicks[socket.id] || 0) + count;
     io.to(matchId).emit('clickUpdate', {
       playerId: socket.id,
       clicks: match.clicks[socket.id],
@@ -122,6 +173,7 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ---- قطع اتصال ----
   socket.on('disconnect', () => {
     console.log('🔴 کاربر قطع شد:', socket.id);
     waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
@@ -135,10 +187,6 @@ io.on('connection', (socket) => {
         break;
       }
     }
-  });
-
-  socket.on('getLeaderboard', () => {
-    socket.emit('leaderboardData', leaderboard);
   });
 });
 
@@ -162,11 +210,12 @@ function updateLeaderboardAfterMatch(matchId) {
   leaderboard[winnerName].totalClicks = (leaderboard[winnerName].totalClicks || 0) + match.clicks[winnerId];
   leaderboard[loserName].totalClicks = (leaderboard[loserName].totalClicks || 0) + match.clicks[loserId];
 
-  saveLeaderboard(leaderboard);
+  saveLeaderboard();
   io.emit('leaderboardData', leaderboard);
 }
 
 http.listen(PORT, () => {
   console.log(`🚀 سرور روی پورت ${PORT} اجرا شد`);
-  leaderboard = loadLeaderboard();
+  deviceDB = readJSON(DEVICE_DB_FILE);
+  leaderboard = readJSON(LEADERBOARD_FILE);
 });
