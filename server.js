@@ -1,6 +1,7 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const httpServer = createServer(app);
@@ -8,33 +9,39 @@ const io = new Server(httpServer, {
   cors: { origin: "*" }
 });
 
-app.use(express.static(__dirname)); // برای سرو کردن HTML
+// سرو کردن فایل‌های استاتیک (HTML, CSS, JS)
+app.use(express.static(__dirname));
 
-// ذخیره‌سازی در حافظه (برای Railway ساده)
-let users = {};        // deviceId => username
-let leaderboard = {};  // username => { totalClicks, wins, losses }
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'coffee_clicker.html'));
+});
 
 io.on('connection', (socket) => {
-  console.log('کاربر متصل شد:', socket.id);
+  console.log('کاربر متصل:', socket.id);
 
   socket.on('identify', ({ deviceId }) => {
-    const username = users[deviceId];
-    socket.emit('identity', { username });
-    socket.join('lobby');
+    socket.emit('identity', { username: null }); // بعداً گسترش بده
   });
 
   socket.on('register', ({ deviceId, username }) => {
-    if (!username || username.length < 2) {
-      return socket.emit('registerError', 'نام کاربری نامعتبر است');
-    }
-    if (Object.values(users).includes(username)) {
-      return socket.emit('registerError', 'این نام کاربری قبلاً گرفته شده');
-    }
+    // منطق ثبت‌نام ساده
+    socket.emit('registerSuccess', { username });
+    io.emit('leaderboardData', {});
+  });
 
-    users[deviceId] = username;
-    if (!leaderboard[username]) {
-      leaderboard[username] = { totalClicks: 0, wins: 0, losses: 0 };
-    }
+  socket.on('addClicks', () => {});
+  socket.on('joinQueue', () => {
+    socket.emit('waiting', { message: 'در حال جستجو...' });
+  });
+  socket.on('getLeaderboard', () => {
+    socket.emit('leaderboardData', {});
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, () => {
+  console.log(`🚀 سرور روی پورت ${PORT} آماده است`);
+});    }
     socket.emit('registerSuccess', { username });
     io.emit('leaderboardData', leaderboard);
   });
